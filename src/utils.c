@@ -8,25 +8,31 @@
 #include <limits.h>
 #include <time.h>
 
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
+
 #include "utils.h"
-
-
-/*
-// old timing. is it better? who knows!!
-double get_wall_time()
-{
-    struct timeval time;
-    if (gettimeofday(&time,NULL)){
-        return 0;
-    }
-    return (double)time.tv_sec + (double)time.tv_usec * .000001;
-}
-*/
 
 double what_time_is_it_now()
 {
     struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
+    
+    //https://gist.github.com/jbenet/1087739     
+    #ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
+      clock_serv_t cclock;
+      mach_timespec_t mts;
+      host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+      clock_get_time(cclock, &mts);
+      mach_port_deallocate(mach_task_self(), cclock);
+      now.tv_sec = mts.tv_sec;
+      now.tv_nsec = mts.tv_nsec;
+    #else
+      clock_gettime(CLOCK_REALTIME, now);
+    #endif
+    
+    
     return now.tv_sec + now.tv_nsec*1e-9;
 }
 
@@ -89,22 +95,6 @@ void shuffle(void *arr, size_t n, size_t size)
         memcpy(arr+(j*size), arr+(i*size), size);
         memcpy(arr+(i*size), swp,          size);
     }
-}
-
-int *random_index_order(int min, int max)
-{
-    int *inds = calloc(max-min, sizeof(int));
-    int i;
-    for(i = min; i < max; ++i){
-        inds[i] = i;
-    }
-    for(i = min; i < max-1; ++i){
-        int swap = inds[i];
-        int index = i + rand()%(max-i);
-        inds[i] = inds[index];
-        inds[index] = swap;
-    }
-    return inds;
 }
 
 void del_arg(int argc, char **argv, int index)
@@ -252,21 +242,6 @@ void error(const char *s)
     perror(s);
     assert(0);
     exit(-1);
-}
-
-unsigned char *read_file(char *filename)
-{
-    FILE *fp = fopen(filename, "rb");
-    size_t size;
-
-    fseek(fp, 0, SEEK_END); 
-    size = ftell(fp);
-    fseek(fp, 0, SEEK_SET); 
-
-    unsigned char *text = calloc(size+1, sizeof(char));
-    fread(text, 1, size, fp);
-    fclose(fp);
-    return text;
 }
 
 void malloc_error()
@@ -597,20 +572,6 @@ int sample_array(float *a, int n)
         if (r <= 0) return i;
     }
     return n-1;
-}
-
-int max_int_index(int *a, int n)
-{
-    if(n <= 0) return -1;
-    int i, max_i = 0;
-    int max = a[0];
-    for(i = 1; i < n; ++i){
-        if(a[i] > max){
-            max = a[i];
-            max_i = i;
-        }
-    }
-    return max_i;
 }
 
 int max_index(float *a, int n)
